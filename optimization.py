@@ -1,59 +1,83 @@
-import gurobipy as gp
-from gurobipy import GRB
+from gurobipy import Model, GRB, quicksum
 
-def run_sprint_optimization(df_tickets, dev_list):
-    """
-    Inputs:
-    - df_tickets: The pandas DataFrame from your CSV
-    - dev_list: The list of developers from st.session_state
-    
-    Returns:
-    - A list of dictionaries containing ticket indices and assigned developers
-    """
-    # 1. Prepare Inputs
-    tickets = df_tickets.index.tolist()
-    developers = [dev['name'] for dev in dev_list]
-    capacity = {dev['name']: dev['hours'] for dev in dev_list}
-    
-    # We use 'story_points' as the predicted time
-    predicted_times = df_tickets['story_points'].fillna(0).tolist()
+def run_sprint_optimization(df, developers):
+    try:
+        # ----------------------------
+        # Sets & Indices
+        # ----------------------------
+        I = list(df.index)  # tickets
+        D = list(range(len(developers)))  # developers (indexed)
 
-    # 2. Optimization Model
-    m = gp.Model("Sprint_Planning")
-    m.setParam('OutputFlag', 0)  # Silence Gurobi output for the web app
+        # ----------------------------
+        # Parameters
+        # ----------------------------
+        P = {i: df.loc[i, 'story_points'] for i in I}  # story points
+        C = {d: developers[d]['hours'] for d in D}     # capacity
 
-    # Decision variables
-    x = m.addVars(tickets, developers, vtype=GRB.BINARY, name="assign")
+        # ----------------------------
+        # Model
+        # ----------------------------
+        model = Model("Sprint_Optimization")
+        model.setParam("OutputFlag", 0)  # silence output
 
-    # Objective: Maximize total points assigned within capacity
-    m.setObjective(
-        gp.quicksum(predicted_times[i] * x[i, d] for i in tickets for d in developers),
-        GRB.MAXIMIZE
-    )
+        # ----------------------------
+        # Decision Variables
+        # x[i,d] = 1 if ticket i assigned to developer d
+        # ----------------------------
+        x = model.addVars(I, D, vtype=GRB.BINARY, name="x")
 
-    # Constraints
-    # Each ticket assigned to AT MOST one developer (some stay in backlog)
-    for i in tickets:
-        m.addConstr(gp.quicksum(x[i, d] for d in developers) <= 1)
-
-    # Developer capacity constraints
-    for d in developers:
-        m.addConstr(
-            gp.quicksum(predicted_times[i] * x[i, d] for i in tickets) <= capacity[d]
+        # ----------------------------
+        # Objective Function
+        # Maximize total story points assigned
+        # ----------------------------
+        model.setObjective(
+            quicksum(P[i] * x[i, d] for i in I for d in D),
+            GRB.MAXIMIZE
         )
 
-    # 3. Solve
-    m.optimize()
+        # ----------------------------
+        # Constraints
+        # ----------------------------
 
-    # 4. Extract results
-    assignment_results = []
-    if m.Status == GRB.OPTIMAL:
-        for i in tickets:
-            for d in developers:
-                if x[i, d].X > 0.5:
-                    assignment_results.append({
-                        "ticket_idx": i,
-                        "developer": d
-                    })
-    
-    return assignment_results
+        # 1. Each ticket assigned to at most one developer
+        for i in I:
+            model.addConstr(
+                quicksum(x[i, d] for d in D) <= 1,
+                name=f"assign_once_{i}"
+            )
+
+        # 2. Developer capacity constraints
+        for d in D:
+            model.addConstr(
+                quicksum(P[i] * x[i, d] for i in I) <= C[d],
+                name=f"capacity_{d}"
+            )
+
+        # ----------------------------
+        # Solve
+        # ----------------------------
+        model.optimize()
+
+        # ----------------------------
+        # Extract Results
+        # ----------------------------
+        if model.status == GRB.OPTIMAL:
+            results = []
+
+            for i in I:
+                for d in D:
+                    if x[i, d].X > 0.5:
+                        results.append({
+                            "ticket_idx": i,
+                            "developer": developers[d]["name"],
+                            "story_points": P[i],
+                            "issue_key": df.loc[i, "issue_key"]
+                        })
+
+            return results
+        else:
+            return None
+
+    except Exception as e:
+        print(f"Optimization Error: {e}")
+        return None
