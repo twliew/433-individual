@@ -2,9 +2,8 @@ from gurobipy import Model, GRB, quicksum
 
 def run_sprint_optimization(df, developers, sprint_weeks=2):
     """
-    ALL-OR-NOTHING assignment with Load Balancing:
-    - Minimizes the maximum workload (L_max) across developers.
-    - Ensures every ticket is assigned (or the model returns Infeasible).
+    Minimizes the maximum workload (L_max) across developers.
+    The capacity is dynamically adjusted based on the sprint_weeks parameter.
     """
     try:
         if df.empty:
@@ -19,58 +18,51 @@ def run_sprint_optimization(df, developers, sprint_weeks=2):
         # ----------------------------
         # Parameters
         # ----------------------------
-        # T_i: Time required for ticket i
         T = {i: df.loc[i, 'time_to_resolution_hours'] for i in I}
-        # C_d: Capacity for developer d
+        
+        # C_d: Capacity = Weekly hours * number of weeks in the sprint
         C = {d: developers[d]['hours'] * sprint_weeks for d in D}
 
         # ----------------------------
-        # Model
+        # Model Setup
         # ----------------------------
         model = Model("Sprint_Optimization_Balanced")
         model.setParam("OutputFlag", 0)
 
         # Decision variables
-        # x[i, d] = 1 if ticket i is assigned to developer d
         x = model.addVars(I, D, vtype=GRB.BINARY, name="x")
-        
-        # L_max represents the maximum workload assigned to any developer
         L_max = model.addVar(vtype=GRB.CONTINUOUS, name="L_max")
 
         # ----------------------------
         # Constraints
         # ----------------------------
 
-        # 1. Assignment Constraint: Every ticket MUST be assigned to exactly one dev
+        # 1. Assignment: Every selected ticket must be assigned to exactly one dev
         model.addConstrs(
             (quicksum(x[i, d] for d in D) == 1 for i in I),
             name="assign_all"
         )
 
-        # 2. Hard Capacity: No developer can exceed their specific capacity
+        # 2. Hard Capacity: Sum of tickets per dev <= Weekly capacity * weeks
         model.addConstrs(
             (quicksum(T[i] * x[i, d] for i in I) <= C[d] for d in D),
             name="capacity"
         )
 
-        # 3. Load Balancing: L_max must be >= the total hours of any developer
+        # 3. Load Balancing: L_max is the ceiling for all developer loads
         model.addConstrs(
             (quicksum(T[i] * x[i, d] for i in I) <= L_max for d in D),
             name="define_lmax"
         )
 
         # ----------------------------
-        # Objective: Minimize the bottleneck (L_max)
+        # Objective & Solve
         # ----------------------------
         model.setObjective(L_max, GRB.MINIMIZE)
-
-        # ----------------------------
-        # Solve
-        # ----------------------------
         model.optimize()
 
         # ----------------------------
-        # Results
+        # Results Parsing
         # ----------------------------
         if model.status == GRB.OPTIMAL:
             results = []
@@ -82,15 +74,9 @@ def run_sprint_optimization(df, developers, sprint_weeks=2):
                             "developer": developers[d]["name"],
                             "time_to_resolution_hours": T[i],
                             "issue_key": df.loc[i, "issue_key"],
-                            "description": df.loc[i, "description"]
-                            if "description" in df.columns else ""
+                            "description": df.loc[i, "description"] if "description" in df.columns else ""
                         })
             return results
-
-        # If the total hours required > total capacity, status will be INFEASIBLE
-        elif model.status == GRB.INFEASIBLE:
-            print("Infeasible: Total ticket hours exceed team capacity.")
-            return []
 
         return []
 
