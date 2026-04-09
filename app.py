@@ -94,7 +94,7 @@ if st.sidebar.button("⚡ Optimize Selected", type="primary", use_container_widt
             st.session_state.selected_tickets = set()
             st.rerun()
         else:
-            st.sidebar.error("Optimization failed! Selection exceeds team capacity.")
+            st.sidebar.error("Optimization failed! Selection exceeds team capacity. Please consider adding more developers to this sprint or reducing the workload.")
 
 # Team Section
 st.sidebar.divider()
