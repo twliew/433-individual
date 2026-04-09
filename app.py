@@ -148,6 +148,7 @@ with col_backlog:
                     st.session_state.selected_tickets.add(index)
                 else:
                     st.session_state.selected_tickets.discard(index)
+                st.write(f"Priority: {row['priority']} | Type: {row['issue_type']}")
                 st.write(row['description'])
                 st.info(f"⏱️ Estimate: {round(row[time_metric], 1)}h")
 
