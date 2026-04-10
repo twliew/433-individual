@@ -24,7 +24,7 @@ if 'selected_tickets' not in st.session_state:
 # ----------------------------------------
 # Use time_resolution_hours or prediction
 # ----------------------------------------
-# comment out which you want to use
+# comment out which you don't want to use
 time_metric = "time_to_resolution_hours"
 # OR 
 # time_metric = "predictions"
@@ -58,8 +58,7 @@ df_backlog = load_and_filter_data(st.session_state.sprint_number)
 st.sidebar.title("Sprint Control Center")
 st.sidebar.subheader(f"Current Sprint: {st.session_state.sprint_number}")
 
-# FIX: Use 'key' to bind directly to session state. 
-# This prevents the glitching/back-and-forth behavior.
+# Sprint Duration Input
 st.sidebar.number_input(
     "Sprint Duration (Weeks)", 
     min_value=1, 
@@ -68,6 +67,7 @@ st.sidebar.number_input(
     key="sprint_weeks" 
 )
 
+# Complete Sprint Button
 if st.sidebar.button("Complete Sprint", use_container_width=True):
     for item in st.session_state.sprint_assignments:
         item['completed_in'] = f"Sprint {st.session_state.sprint_number}"
@@ -77,6 +77,7 @@ if st.sidebar.button("Complete Sprint", use_container_width=True):
     st.session_state.sprint_number += 1
     st.rerun()
 
+# Optimize Button
 if st.sidebar.button("⚡ Optimize Selected", type="primary", use_container_width=True):
     if not st.session_state.selected_tickets:
         st.sidebar.error("Select tickets from Backlog first!")
@@ -96,7 +97,7 @@ if st.sidebar.button("⚡ Optimize Selected", type="primary", use_container_widt
         else:
             st.sidebar.error("Optimization failed! Selection exceeds team capacity. Please consider adding more developers to this sprint or reducing the workload.")
 
-# Team Section
+# Team Management
 st.sidebar.divider()
 st.sidebar.title("Team Capacity")
 
@@ -131,6 +132,7 @@ col_backlog, col_sprint, col_done = st.columns(3)
 assigned_ids = [item['ticket_idx'] for item in st.session_state.sprint_assignments]
 done_ids = [item['ticket_idx'] for item in st.session_state.done_tickets]
 
+# backlog section
 with col_backlog:
     st.header("📋 Backlog")
     st.divider()
@@ -152,6 +154,7 @@ with col_backlog:
                 st.write(row['description'])
                 st.info(f"⏱️ Estimate: {round(row[time_metric], 1)}h")
 
+# sprint assignments section
 with col_sprint:
     st.header("👤 Assignments")
     st.divider()
@@ -161,6 +164,7 @@ with col_sprint:
             st.success(f"Assigned: {item['developer']}")
             st.write(f"Estimated Time: {round(item[time_metric], 1)}h")
 
+# done section
 with col_done:
     st.header("✅ Completed")
     st.divider()

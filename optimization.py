@@ -1,10 +1,6 @@
 from gurobipy import Model, GRB, quicksum
 
 def run_sprint_optimization(df, developers, sprint_weeks=2):
-    """
-    Minimizes the maximum workload (L_max) across developers.
-    The capacity is dynamically adjusted based on the sprint_weeks parameter.
-    """
     try:
         if df.empty:
             return []
@@ -29,7 +25,9 @@ def run_sprint_optimization(df, developers, sprint_weeks=2):
         model = Model("Sprint_Optimization_Balanced")
         model.setParam("OutputFlag", 0)
 
-        # Decision variables
+        # ----------------------------
+        # Decision Variables
+        # ----------------------------
         x = model.addVars(I, D, vtype=GRB.BINARY, name="x")
         L_max = model.addVar(vtype=GRB.CONTINUOUS, name="L_max")
 
